@@ -18,6 +18,17 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+/**
+ * Приём уведомлений через сервисы Google.
+ *
+ * Главное отличие от опроса в фоне: этот путь работает, даже когда
+ * приложение полностью выгружено. Сервисы Google Play живут в системе
+ * постоянно, и по команде сервера они сами поднимают наш процесс.
+ * Именно так устроены уведомления в больших мессенджерах.
+ *
+ * Сообщения приходят только зашифрованными: расшифровка происходит
+ * здесь, ключом, который веб-часть положила в настройки приложения.
+ */
 class FcmService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
@@ -41,10 +52,13 @@ class FcmService : FirebaseMessagingService() {
             }
         }
 
+        // Открытый чат не тревожим
         val active = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("active", "")
         if (chatId.isNotEmpty() && chatId == active) return
 
-        show(d["tag"] ?: System.currentTimeMillis().toString(), title, body)
+        val tag = d["tag"] ?: System.currentTimeMillis().toString()
+        FcmTokens.markShown(this, tag)   // чтобы фоновый опрос не показал это же второй раз
+        show(tag, title, body)
     }
 
     private fun show(id: String, title: String, body: String) {
@@ -69,6 +83,20 @@ class FcmService : FirebaseMessagingService() {
 object FcmTokens {
 
     private val http = OkHttpClient()
+
+    /** Просит у Google адрес этого устройства и сохраняет его в базе. */
+    /** Список недавно показанных сообщений — защита от двойных уведомлений. */
+    fun markShown(ctx: Context, id: String) {
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val cur = (p.getString("shown", "") ?: "").split(",").filter { it.isNotBlank() }
+        val next = (listOf(id) + cur).distinct().take(60)
+        p.edit().putString("shown", next.joinToString(",")).apply()
+    }
+
+    fun wasShown(ctx: Context, id: String): Boolean {
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return (p.getString("shown", "") ?: "").split(",").contains(id)
+    }
 
     fun register(ctx: Context) {
         try {
@@ -108,6 +136,7 @@ object FcmTokens {
         }.start()
     }
 
+    /** Тот же AES-GCM, что и в браузере. */
     fun decrypt(ctx: Context, chatId: String, ctB64: String, ivB64: String): String? = try {
         val keyB64 = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString("key_$chatId", null)
