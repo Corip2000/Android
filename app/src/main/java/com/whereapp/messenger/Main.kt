@@ -33,6 +33,11 @@ const val SUPA_URL = "https://zvdwimgmbxhvvdnmjuag.supabase.co"
 const val SUPA_KEY = "sb_publishable_0FbeQ-Y9mtRqlKHmKRXrHw_RjI-EHa1"
 const val PREFS = "whereapp"
 
+/* ============================================================
+   Экран приложения: тот же сайт в WebView.
+   Чаты, звонки и шифрование работают как в браузере,
+   отличие одно — рядом крутится служба уведомлений.
+   ============================================================ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
@@ -62,8 +67,7 @@ class MainActivity : AppCompatActivity() {
             return@registerForActivityResult
         }
 
-        val uris = data.getStringArrayListExtra(PhotoPickerActivity.EXTRA_URIS)
-            ?: return@registerForActivityResult
+        val uris = data.getStringArrayListExtra(PhotoPickerActivity.EXTRA_URIS) ?: return@registerForActivityResult
         val cap = data.getStringExtra(PhotoPickerActivity.EXTRA_CAPTION) ?: ""
         Thread {
             val out = ArrayList<Pair<String, String>>()
@@ -149,16 +153,6 @@ class MainActivity : AppCompatActivity() {
         FcmTokens.register(this)
     }
 
-    fun openPhotoPicker() {
-        runOnUiThread {
-            try {
-                photoPicker.launch(Intent(this, PhotoPickerActivity::class.java))
-            } catch (e: Exception) {
-                Toast.makeText(this, "Не удалось открыть выбор фото", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
     private fun askPermissions() {
         val need = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) need.add(Manifest.permission.READ_MEDIA_IMAGES)
@@ -185,6 +179,17 @@ class MainActivity : AppCompatActivity() {
         if (web.canGoBack()) web.goBack() else super.onBackPressed()
     }
 
+    /** Мост: сайт передаёт сюда ключи чатов, чтобы служба показала текст. */
+    fun openPhotoPicker() {
+        runOnUiThread {
+            try {
+                photoPicker.launch(Intent(this, PhotoPickerActivity::class.java))
+            } catch (e: Exception) {
+                Toast.makeText(this, "Не удалось открыть выбор фото", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     class Bridge(private val ctx: Context) {
         private fun p() = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -192,7 +197,7 @@ class MainActivity : AppCompatActivity() {
         fun setUid(uid: String) {
             p().edit().putString("uid", uid).apply()
             WatchService.start(ctx)
-            FcmTokens.register(ctx)
+            FcmTokens.register(ctx)      // адрес устройства привязываем к аккаунту
         }
 
         @JavascriptInterface
@@ -217,6 +222,12 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
+/* ============================================================
+   Служба переднего плана.
+   Постоянное уведомление в шторке не даёт системе выгрузить
+   процесс — благодаря этому сообщения приходят при закрытом
+   приложении. Веб-странице такое недоступно в принципе.
+   ============================================================ */
 class WatchService : Service() {
 
     companion object {
@@ -373,11 +384,9 @@ class WatchService : Service() {
 
             var body = when (m.optString("kind", "text")) {
                 "image" -> "\uD83D\uDCF7 Фото"
-                "album" -> "\uD83D\uDCF7 Фото"
                 "audio" -> "\uD83C\uDFA4 Голосовое"
                 "video" -> "\uD83C\uDFAC Видео"
                 "file" -> "\uD83D\uDCCE Файл"
-                "poll" -> "\uD83D\uDCCA Опрос"
                 else -> "Новое сообщение"
             }
             if (m.optString("kind", "") == "text" && !m.isNull("ct")) {
@@ -385,7 +394,9 @@ class WatchService : Service() {
             }
             if (group) body = "$sender: $body"
 
-            showMessage(m.optString("id", ts.toString()), title, body)
+            val mid = m.optString("id", ts.toString())
+            if (FcmTokens.wasShown(this, mid)) continue   // уже показано через Google
+            showMessage(mid, title, body)
         }
 
         p.edit().putLong("since", maxTs).apply()
@@ -403,6 +414,7 @@ class WatchService : Service() {
         } catch (e: Exception) { "Сообщение" }
     }
 
+    /** Тот же алгоритм, что в браузере: AES-GCM, метка 128 бит. */
     private fun decrypt(chatId: String, ctB64: String, ivB64: String): String? = try {
         val keyB64 = prefs().getString("key_$chatId", null)
         if (keyB64 == null) null else {
@@ -433,10 +445,12 @@ class WatchService : Service() {
             .setAutoCancel(true)
             .setContentIntent(openIntent(id.hashCode()))
             .build()
+        // Свой номер у каждого сообщения, иначе система подменяет предыдущее
         getSystemService(NotificationManager::class.java).notify(id.hashCode(), n)
     }
 }
 
+/** Поднимает службу после перезагрузки телефона. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) WatchService.start(context)
