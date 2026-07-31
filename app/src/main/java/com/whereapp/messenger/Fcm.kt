@@ -66,7 +66,7 @@ class FcmService : FirebaseMessagingService() {
             this, id.hashCode(), Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val n = NotificationCompat.Builder(this, "whereapp_messages")
+        val n = NotificationCompat.Builder(this, "whereapp_msg_v2")
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
