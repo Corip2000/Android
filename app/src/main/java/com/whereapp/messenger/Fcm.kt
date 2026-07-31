@@ -4,6 +4,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.util.Base64
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessaging
@@ -58,10 +64,11 @@ class FcmService : FirebaseMessagingService() {
 
         val tag = d["tag"] ?: System.currentTimeMillis().toString()
         FcmTokens.markShown(this, tag)   // чтобы фоновый опрос не показал это же второй раз
-        show(tag, title, body)
+        val avatar = FcmTokens.loadAvatar(d["icon"])
+        show(tag, title, body, avatar)
     }
 
-    private fun show(id: String, title: String, body: String) {
+    private fun show(id: String, title: String, body: String, avatar: Bitmap?) {
         val open = PendingIntent.getActivity(
             this, id.hashCode(), Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -75,8 +82,8 @@ class FcmService : FirebaseMessagingService() {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(open)
-            .build()
-        getSystemService(NotificationManager::class.java).notify(id.hashCode(), n)
+        if (avatar != null) n.setLargeIcon(avatar)
+        getSystemService(NotificationManager::class.java).notify(id.hashCode(), n.build())
     }
 }
 
@@ -134,6 +141,32 @@ object FcmTokens {
             } catch (e: Exception) {
             }
         }.start()
+    }
+
+    /** Скачивает аватарку отправителя и делает её круглой. */
+    fun loadAvatar(url: String?): Bitmap? {
+        if (url.isNullOrBlank()) return null
+        return try {
+            val req = Request.Builder().url(url).build()
+            http.newCall(req).execute().use { r ->
+                if (!r.isSuccessful) return null
+                val bytes = r.body?.bytes() ?: return null
+                val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+                val side = minOf(src.width, src.height)
+                val sq = Bitmap.createBitmap(
+                    src, (src.width - side) / 2, (src.height - side) / 2, side, side
+                )
+                val out = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+                val c = Canvas(out)
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+                c.drawCircle(side / 2f, side / 2f, side / 2f, paint)
+                paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+                c.drawBitmap(sq, 0f, 0f, paint)
+                out
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /** Тот же AES-GCM, что и в браузере. */
