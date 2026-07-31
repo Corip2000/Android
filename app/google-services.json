@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "400119453719",
+    "project_id": "whereapp-51316",
+    "storage_bucket": "whereapp-51316.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:400119453719:android:a9932a67de18d5ff45a452",
+        "android_client_info": {
+          "package_name": "com.whereapp.messenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCU0ENpER-4UMrIJ9Ctd1QIv8jPyBX123U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
