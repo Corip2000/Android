@@ -146,6 +146,7 @@ class MainActivity : AppCompatActivity() {
 
         if (savedInstanceState == null) web.loadUrl(SITE)
         WatchService.start(this)
+        FcmTokens.register(this)
     }
 
     fun openPhotoPicker() {
@@ -191,6 +192,7 @@ class MainActivity : AppCompatActivity() {
         fun setUid(uid: String) {
             p().edit().putString("uid", uid).apply()
             WatchService.start(ctx)
+            FcmTokens.register(ctx)
         }
 
         @JavascriptInterface
@@ -371,6 +373,7 @@ class WatchService : Service() {
 
             var body = when (m.optString("kind", "text")) {
                 "image" -> "\uD83D\uDCF7 Фото"
+                "album" -> "\uD83D\uDCF7 Фото"
                 "audio" -> "\uD83C\uDFA4 Голосовое"
                 "video" -> "\uD83C\uDFAC Видео"
                 "file" -> "\uD83D\uDCCE Файл"
