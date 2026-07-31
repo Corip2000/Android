@@ -232,7 +232,7 @@ class WatchService : Service() {
 
     companion object {
         private const val CH_SILENT = "whereapp_service"
-        private const val CH_ALERT = "whereapp_messages"
+        private const val CH_ALERT = "whereapp_msg_v2"
         private const val ONGOING_ID = 1
         private const val POLL_MS = 8_000L
 
@@ -284,7 +284,17 @@ class WatchService : Service() {
         )
         nm.createNotificationChannel(
             NotificationChannel(CH_ALERT, "Сообщения", NotificationManager.IMPORTANCE_HIGH).apply {
-                enableVibration(true); enableLights(true)
+                enableVibration(true)
+                enableLights(true)
+                setSound(
+                    android.media.RingtoneManager.getDefaultUri(
+                        android.media.RingtoneManager.TYPE_NOTIFICATION
+                    ),
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
             }
         )
     }
