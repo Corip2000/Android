@@ -72,8 +72,16 @@ class MainActivity : AppCompatActivity() {
         Thread {
             val out = ArrayList<Pair<String, String>>()
             uris.forEachIndexed { i, u ->
-                val b64 = PhotoBridge.toBase64(this, Uri.parse(u), 1600, 85)
-                if (b64 != null) out.add("photo_$i.jpg" to b64)
+                val uri = Uri.parse(u)
+                val type = contentResolver.getType(uri) ?: ""
+                if (type.startsWith("video/")) {
+                    // видео отдаём как есть, без пережатия
+                    val b64 = PhotoBridge.fileToBase64(this, uri)
+                    if (b64 != null) out.add("video_$i.mp4|$type" to b64)
+                } else {
+                    val b64 = PhotoBridge.toBase64(this, uri, 1600, 85)
+                    if (b64 != null) out.add("photo_$i.jpg" to b64)
+                }
             }
             PhotoBridge.deliver(web, out, cap)
         }.start()
@@ -149,6 +157,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Скачивание файлов: WebView сам этого не умеет, сохраняем в галерею
+        web.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
+            Downloads.save(this, url, mimeType, contentDisposition)
+        }
+
         if (savedInstanceState == null) web.loadUrl(SITE)
         WatchService.start(this)
         FcmTokens.register(this)
@@ -209,6 +222,11 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun saveName(uid: String, name: String) {
             p().edit().putString("name_$uid", name).apply()
+        }
+
+        @JavascriptInterface
+        fun saveToGallery(dataUrl: String, name: String) {
+            Downloads.saveDataUrl(ctx, dataUrl, name)
         }
 
         @JavascriptInterface
