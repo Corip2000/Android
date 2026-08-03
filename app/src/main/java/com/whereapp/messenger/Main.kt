@@ -106,6 +106,7 @@ class MainActivity : AppCompatActivity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
 
         web.addJavascriptInterface(Bridge(this), "WhereAppNative")
+        web.addJavascriptInterface(CallBridge(this), "WhereAppCall")
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(v: WebView?, req: WebResourceRequest?): Boolean {
