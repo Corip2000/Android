@@ -42,6 +42,7 @@ class PhotoPickerActivity : AppCompatActivity() {
     }
 
     private val all = ArrayList<Uri>()
+    private val isVideo = HashSet<Uri>()
     private val chosen = ArrayList<Uri>()
     private lateinit var grid: GridView
     private lateinit var title: TextView
@@ -263,6 +264,21 @@ class PhotoPickerActivity : AppCompatActivity() {
             val uri = all[pos]
             paintSelection(box, uri)
 
+            // подпись, что это видео
+            if (box.childCount < 4 && isVideo.contains(uri)) {
+                val play = TextView(this@PhotoPickerActivity)
+                play.text = "▶"
+                play.textSize = 20f
+                play.setTextColor(Color.WHITE)
+                val plp = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                plp.gravity = Gravity.BOTTOM or Gravity.START
+                plp.setMargins(dp(8), 0, 0, dp(6))
+                play.layoutParams = plp
+                box.addView(play)
+            }
+
             // Миниатюра из кэша: без этого при каждом касании все фото
             // перезагружались заново и сетка «прыгала»
             val key = uri.toString()
@@ -273,7 +289,8 @@ class PhotoPickerActivity : AppCompatActivity() {
                 img.setImageDrawable(null)
                 img.setTag(R.drawable.ic_stat, key)
                 CoroutineScope(Dispatchers.IO).launch {
-                    val bmp = decodeScaled(this@PhotoPickerActivity, uri, thumbPx)
+                    val bmp = if (isVideo.contains(uri)) videoFrame(this@PhotoPickerActivity, uri, thumbPx)
+                              else decodeScaled(this@PhotoPickerActivity, uri, thumbPx)
                     if (bmp != null) cache.put(key, bmp)
                     withContext(Dispatchers.Main) {
                         if (bmp != null && img.getTag(R.drawable.ic_stat) == key) {
@@ -323,6 +340,17 @@ object PhotoBridge {
         return bitmapToBase64(bmp, quality)
     }
 
+    /** Читает файл целиком: нужно для видео, его пережимать нельзя. */
+    fun fileToBase64(ctx: Context, uri: Uri): String? = try {
+        ctx.contentResolver.openInputStream(uri).use { input ->
+            val bytes = input?.readBytes()
+            if (bytes == null || bytes.size > 20 * 1024 * 1024) null
+            else Base64.encodeToString(bytes, Base64.NO_WRAP)
+        }
+    } catch (e: Exception) {
+        null
+    }
+
     fun bitmapToBase64(bmp: Bitmap, quality: Int): String {
         val out = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.JPEG, quality, out)
@@ -345,6 +373,25 @@ object PhotoBridge {
 }
 
 /** Читает изображение сразу уменьшенным, чтобы не съесть память. */
+/** Первый кадр видео для миниатюры. */
+fun videoFrame(ctx: Context, uri: Uri, maxSide: Int): Bitmap? {
+    val r = android.media.MediaMetadataRetriever()
+    return try {
+        r.setDataSource(ctx, uri)
+        val bmp = r.getFrameAtTime(500000) ?: return null
+        val side = maxOf(bmp.width, bmp.height)
+        if (side <= maxSide) bmp
+        else {
+            val k = maxSide.toFloat() / side
+            Bitmap.createScaledBitmap(bmp, (bmp.width * k).toInt(), (bmp.height * k).toInt(), true)
+        }
+    } catch (e: Exception) {
+        null
+    } finally {
+        try { r.release() } catch (e: Exception) { }
+    }
+}
+
 fun decodeScaled(ctx: Context, uri: Uri, maxSide: Int): Bitmap? {
     return try {
         val bounds = BitmapFactory.Options()
