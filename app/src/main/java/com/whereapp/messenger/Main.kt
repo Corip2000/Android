@@ -74,13 +74,20 @@ class MainActivity : AppCompatActivity() {
             uris.forEachIndexed { i, u ->
                 val uri = Uri.parse(u)
                 val type = contentResolver.getType(uri) ?: ""
-                if (type.startsWith("video/")) {
+                // Тип берём от системы, а если она молчит — по расширению.
+                // Раньше при пустом типе фото уходило в ветку видео.
+                val ext = (u.substringAfterLast('.', "")).lowercase()
+                val looksVideo = type.startsWith("video/") ||
+                    (type.isBlank() && ext in setOf("mp4", "mov", "m4v", "webm", "3gp", "mkv"))
+
+                if (looksVideo) {
                     // видео отдаём как есть, без пережатия
                     val b64 = PhotoBridge.fileToBase64(this, uri)
-                    if (b64 != null) out.add("video_$i.mp4|$type" to b64)
+                    val mime = if (type.isBlank()) "video/mp4" else type
+                    if (b64 != null) out.add("video_$i.mp4|$mime" to b64)
                 } else {
                     val b64 = PhotoBridge.toBase64(this, uri, 1600, 85)
-                    if (b64 != null) out.add("photo_$i.jpg" to b64)
+                    if (b64 != null) out.add("photo_$i.jpg|image/jpeg" to b64)
                 }
             }
             PhotoBridge.deliver(web, out, cap)
