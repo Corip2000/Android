@@ -162,6 +162,9 @@ class MainActivity : AppCompatActivity() {
             Downloads.save(this, url, mimeType, contentDisposition)
         }
 
+        // Кнопки громкости по умолчанию управляют звуком вызова во время разговора
+        volumeControlStream = android.media.AudioManager.STREAM_VOICE_CALL
+
         if (savedInstanceState == null) web.loadUrl(SITE)
         WatchService.start(this)
         FcmTokens.register(this)
@@ -194,6 +197,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Мост: сайт передаёт сюда ключи чатов, чтобы служба показала текст. */
+    /**
+     * Во время разговора качелька громкости должна менять громкость вызова.
+     * По умолчанию Android отдаёт её медиапотоку, поэтому ползунок появлялся,
+     * но на разговор не влиял.
+     */
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (CallAudio.isActive() &&
+            (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP ||
+             keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            val dir = if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP)
+                android.media.AudioManager.ADJUST_RAISE
+            else android.media.AudioManager.ADJUST_LOWER
+            am.adjustStreamVolume(
+                android.media.AudioManager.STREAM_VOICE_CALL, dir,
+                android.media.AudioManager.FLAG_SHOW_UI
+            )
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     fun openPhotoPicker() {
         runOnUiThread {
             try {
