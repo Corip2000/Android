@@ -172,8 +172,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun askPermissions() {
         val need = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-        if (Build.VERSION.SDK_INT >= 33) need.add(Manifest.permission.READ_MEDIA_IMAGES)
-        else need.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        if (Build.VERSION.SDK_INT >= 33) {
+            need.add(Manifest.permission.READ_MEDIA_IMAGES)
+            need.add(Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            need.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             need.add(Manifest.permission.POST_NOTIFICATIONS)
         }
