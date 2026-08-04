@@ -129,9 +129,44 @@ class PhotoPickerActivity : AppCompatActivity() {
         thumbPx = cell + dp(40)          // берём с запасом, иначе превью мылит
         adapter = PhotoAdapter()
         grid.adapter = adapter
-        grid.setOnItemClickListener { _, _, pos, _ -> toggle(all[pos]) }
+        grid.setOnTouchListener { _, ev ->
+            touchX = ev.x + grid.scrollX
+            touchY = ev.y + grid.scrollY
+            false
+        }
+        // Тап по кружку отмечает, тап по самой картинке открывает просмотр
+        grid.setOnItemClickListener { _, view, pos, _ ->
+            val uri = all[pos]
+            val box = view as? FrameLayout
+            val badge = (box?.tag as? Array<*>)?.get(2) as? TextView
+            if (badge != null && lastTouchInBadge(box, badge)) toggle(uri) else preview(uri)
+        }
 
         loadPhotos()
+    }
+
+    private var touchX = 0f
+    private var touchY = 0f
+
+    private fun lastTouchInBadge(box: FrameLayout, badge: TextView): Boolean {
+        val bx = box.left + badge.left
+        val by = box.top + badge.top
+        val pad = dp(10)
+        return touchX >= bx - pad && touchX <= bx + badge.width + pad &&
+               touchY >= by - pad && touchY <= by + badge.height + pad
+    }
+
+    /** Полноэкранный просмотр снимка или видео прямо из выбора. */
+    private fun preview(uri: Uri) {
+        try {
+            val i = Intent(Intent.ACTION_VIEW)
+            val type = contentResolver.getType(uri) ?: "image/*"
+            i.setDataAndType(uri, type)
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(i)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Не удалось открыть", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
