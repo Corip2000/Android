@@ -398,7 +398,7 @@ object PhotoBridge {
     fun fileToBase64(ctx: Context, uri: Uri): String? = try {
         ctx.contentResolver.openInputStream(uri).use { input ->
             val bytes = input?.readBytes()
-            if (bytes == null || bytes.size > 20 * 1024 * 1024) null
+            if (bytes == null || bytes.size > 100 * 1024 * 1024) null
             else Base64.encodeToString(bytes, Base64.NO_WRAP)
         }
     } catch (e: Exception) {
