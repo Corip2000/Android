@@ -43,6 +43,7 @@ class PhotoPickerActivity : AppCompatActivity() {
 
     private val all = ArrayList<Uri>()
     private val isVideo = HashSet<Uri>()
+    private val durations = HashMap<Uri, Long>()   // длительность видео в миллисекундах
     private val chosen = ArrayList<Uri>()
     private lateinit var grid: GridView
     private lateinit var title: TextView
@@ -179,15 +180,21 @@ class PhotoPickerActivity : AppCompatActivity() {
             fun collect(base: Uri, dateCol: String, video: Boolean) {
                 var c: Cursor? = null
                 try {
-                    c = contentResolver.query(
-                        base, arrayOf(MediaStore.MediaColumns._ID, dateCol), null, null,
-                        "$dateCol DESC"
-                    )
+                    val cols = if (video)
+                        arrayOf(MediaStore.MediaColumns._ID, dateCol, MediaStore.Video.Media.DURATION)
+                    else
+                        arrayOf(MediaStore.MediaColumns._ID, dateCol)
+                    c = contentResolver.query(base, cols, null, null, "$dateCol DESC")
                     var n = 0
                     while (c != null && c.moveToNext() && n < 300) {
                         val id = c.getLong(0)
                         val date = c.getLong(1)
-                        picked.add(Triple(Uri.withAppendedPath(base, id.toString()), date, video))
+                        val uri = Uri.withAppendedPath(base, id.toString())
+                        picked.add(Triple(uri, date, video))
+                        if (video) {
+                            val d = try { c.getLong(2) } catch (e: Exception) { 0L }
+                            if (d > 0) durations[uri] = d
+                        }
                         n++
                     }
                 } catch (e: Exception) {
@@ -273,6 +280,7 @@ class PhotoPickerActivity : AppCompatActivity() {
             val img: ImageView
             val badge: TextView
             val shade: View
+            val vlabel: TextView
 
             if (convert == null) {
                 box = FrameLayout(this@PhotoPickerActivity)
@@ -300,39 +308,54 @@ class PhotoPickerActivity : AppCompatActivity() {
                 badge.textSize = 12f
                 badge.gravity = Gravity.CENTER
                 badge.setTextColor(Color.WHITE)
-                val lp = FrameLayout.LayoutParams(dp(24), dp(24))
+                val lp = FrameLayout.LayoutParams(dp(26), dp(26))
                 lp.gravity = Gravity.TOP or Gravity.END
-                lp.setMargins(0, dp(7), dp(7), 0)
+                lp.setMargins(0, dp(6), dp(6), 0)
                 badge.layoutParams = lp
                 box.addView(badge)
 
-                box.tag = arrayOf(img, shade, badge)
+                // Метка видео с длительностью. Создаём один раз: если добавлять
+                // её на лету, при прокрутке она остаётся на чужой плитке,
+                // и фотографии выглядят как видео.
+                vlabel = TextView(this@PhotoPickerActivity)
+                vlabel.textSize = 11f
+                vlabel.setTextColor(Color.WHITE)
+                vlabel.setPadding(dp(6), dp(2), dp(6), dp(2))
+                val vlp = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                vlp.gravity = Gravity.BOTTOM or Gravity.START
+                vlp.setMargins(dp(8), 0, 0, dp(8))
+                vlabel.layoutParams = vlp
+                vlabel.visibility = View.GONE
+                box.addView(vlabel)
+
+                box.tag = arrayOf(img, shade, badge, vlabel)
             } else {
                 box = convert as FrameLayout
                 val t = box.tag as Array<*>
                 img = t[0] as ImageView
                 shade = t[1] as View
                 badge = t[2] as TextView
+                vlabel = t[3] as TextView
             }
 
             val uri = all[pos]
             paintSelection(box, uri)
 
-            // подпись, что это видео
-            if (box.childCount < 4 && isVideo.contains(uri)) {
-                val play = TextView(this@PhotoPickerActivity)
-                play.text = "▶"
-                play.textSize = 20f
-                play.setTextColor(Color.WHITE)
-                val plp = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-                plp.gravity = Gravity.BOTTOM or Gravity.START
-                plp.setMargins(dp(8), 0, 0, dp(6))
-                play.layoutParams = plp
-                box.addView(play)
+            if (isVideo.contains(uri)) {
+                val ms = durations[uri] ?: 0L
+                val sec = (ms / 1000).toInt()
+                vlabel.text = if (sec > 0)
+                    "▶  " + (sec / 60) + ":" + String.format("%02d", sec % 60)
+                else "▶"
+                vlabel.background = pillBg()
+                vlabel.visibility = View.VISIBLE
+            } else {
+                vlabel.visibility = View.GONE
             }
 
+            // подпись, что это видео
             // Миниатюра из кэша: без этого при каждом касании все фото
             // перезагружались заново и сетка «прыгала»
             val key = uri.toString()
@@ -372,6 +395,14 @@ class PhotoPickerActivity : AppCompatActivity() {
             badge.text = ""
             badge.background = roundBadge(Color.parseColor("#55000000"))
         }
+    }
+
+    private fun pillBg(): GradientDrawable {
+        val d = GradientDrawable()
+        d.shape = GradientDrawable.RECTANGLE
+        d.cornerRadius = dp(9).toFloat()
+        d.setColor(Color.parseColor("#A6000000"))
+        return d
     }
 
     private fun roundBadge(color: Int): GradientDrawable {
