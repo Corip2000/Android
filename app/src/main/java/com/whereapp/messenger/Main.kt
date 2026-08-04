@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Base64
+import android.view.View
 import android.webkit.*
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -133,8 +134,40 @@ class MainActivity : AppCompatActivity() {
         }
 
         web.webChromeClient = object : WebChromeClient() {
+            private var fullView: View? = null
+            private var fullCb: CustomViewCallback? = null
+
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread { request.grant(request.resources) }
+            }
+
+            // Без этих двух методов WebView не умеет разворачивать видео:
+            // кнопка «на весь экран» просто ничего не делала
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (fullView != null) { callback?.onCustomViewHidden(); return }
+                fullView = view
+                fullCb = callback
+                val root = window.decorView as android.view.ViewGroup
+                view?.setBackgroundColor(android.graphics.Color.BLACK)
+                root.addView(
+                    view,
+                    android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                )
+                web.visibility = View.GONE
+                requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            }
+
+            override fun onHideCustomView() {
+                val root = window.decorView as android.view.ViewGroup
+                fullView?.let { root.removeView(it) }
+                fullView = null
+                web.visibility = View.VISIBLE
+                try { fullCb?.onCustomViewHidden() } catch (e: Exception) { }
+                fullCb = null
+                requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             }
 
             override fun onShowFileChooser(
