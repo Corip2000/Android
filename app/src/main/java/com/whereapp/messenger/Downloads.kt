@@ -50,6 +50,33 @@ object Downloads {
         }
     }
 
+    /* ---- Приём больших файлов по частям ----
+       Видео в виде одной data-строки не доходит: WebView обрывает
+       слишком длинный вызов. Поэтому принимаем кусками и склеиваем. */
+    private val chunks = HashMap<String, StringBuilder>()
+
+    fun chunkStart(id: String) {
+        chunks[id] = StringBuilder()
+    }
+
+    fun chunkAdd(id: String, part: String) {
+        chunks[id]?.append(part)
+    }
+
+    fun chunkFinish(ctx: Context, id: String, name: String, mime: String) {
+        val sb = chunks.remove(id)
+        if (sb == null) {
+            Toast.makeText(ctx, "Файл не получен", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val bytes = Base64.decode(sb.toString(), Base64.DEFAULT)
+            writeFile(ctx, bytes, fixName(name, mime), mime)
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "Ошибка сохранения", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun fixName(name: String, mime: String): String {
         if (name.contains('.')) return name
         val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "bin"
