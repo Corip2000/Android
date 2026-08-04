@@ -173,30 +173,49 @@ class PhotoPickerActivity : AppCompatActivity() {
 
     private fun loadPhotos() {
         CoroutineScope(Dispatchers.IO).launch {
-            val cols = arrayOf(MediaStore.Images.Media._ID)
-            var c: Cursor? = null
-            try {
-                c = contentResolver.query(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cols, null, null,
-                    MediaStore.Images.Media.DATE_ADDED + " DESC"
-                )
-                var n = 0
-                while (c != null && c.moveToNext() && n < 400) {
-                    val id = c.getLong(0)
-                    all.add(
-                        Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id.toString())
+            // Читаем фото и видео вместе, свежие сверху
+            val picked = ArrayList<Triple<Uri, Long, Boolean>>()
+
+            fun collect(base: Uri, dateCol: String, video: Boolean) {
+                var c: Cursor? = null
+                try {
+                    c = contentResolver.query(
+                        base, arrayOf(MediaStore.MediaColumns._ID, dateCol), null, null,
+                        "$dateCol DESC"
                     )
-                    n++
+                    var n = 0
+                    while (c != null && c.moveToNext() && n < 300) {
+                        val id = c.getLong(0)
+                        val date = c.getLong(1)
+                        picked.add(Triple(Uri.withAppendedPath(base, id.toString()), date, video))
+                        n++
+                    }
+                } catch (e: Exception) {
+                } finally {
+                    c?.close()
                 }
-            } catch (e: Exception) {
-            } finally {
-                c?.close()
             }
+
+            collect(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                MediaStore.Images.Media.DATE_ADDED, false
+            )
+            collect(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                MediaStore.Video.Media.DATE_ADDED, true
+            )
+
+            picked.sortByDescending { it.second }
+            picked.take(400).forEach {
+                all.add(it.first)
+                if (it.third) isVideo.add(it.first)
+            }
+
             withContext(Dispatchers.Main) {
                 adapter.notifyDataSetChanged()
                 if (all.isEmpty()) {
                     Toast.makeText(this@PhotoPickerActivity,
-                        "Фотографии не найдены. Разрешите доступ к файлам в настройках.",
+                        "Фото и видео не найдены. Разрешите доступ к файлам в настройках.",
                         Toast.LENGTH_LONG).show()
                 }
             }
