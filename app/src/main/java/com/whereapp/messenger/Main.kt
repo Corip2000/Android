@@ -258,6 +258,22 @@ class MainActivity : AppCompatActivity() {
             Downloads.saveDataUrl(ctx, dataUrl, name)
         }
 
+        // Большие файлы приходят частями: целиком они не помещаются в один вызов
+        @JavascriptInterface
+        fun saveStart(id: String) {
+            Downloads.chunkStart(id)
+        }
+
+        @JavascriptInterface
+        fun savePart(id: String, part: String) {
+            Downloads.chunkAdd(id, part)
+        }
+
+        @JavascriptInterface
+        fun saveFinish(id: String, name: String, mime: String) {
+            Downloads.chunkFinish(ctx, id, name, mime)
+        }
+
         @JavascriptInterface
         fun pickPhotos() {
             (ctx as? MainActivity)?.openPhotoPicker()
