@@ -85,6 +85,9 @@ object CallAudio {
         }
     }
 
+    /** Идёт ли сейчас разговор — по этому Activity понимает, чью громкость менять. */
+    fun isActive() = active
+
     /** Звонок закончился: возвращаем телефон в обычное состояние. */
     fun stop(ctx: Context) {
         if (!active) return
